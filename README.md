@@ -1,2 +1,2 @@
-# Data-Science-projects
+# Telecom Churn analysis
 Machine learning using R
