@@ -1,0 +1,156 @@
+#Exploratory data analysis
+>table(churn$Churn)
+[1] 0    1
+    5163 1869
+#most common type of internet service in the dataset
+>table(churn$InternetService)
+[1] DSL Fiber Optic No
+#mean monthly charges amongst customers with month-to-month contracts
+> tapply(churn$MonthlyCharges,churn$Contract, mean)
+[1] Month-to-month       One year       Two year
+	 66.39849       65.07942       60.87237
+# Logistic regression
+# One independent variable - tenure
+> logit1 = glm(Churn~tenure, data = cTrain, family = binomial)
+> summary(logit1)
+#Coefficient of tenure is -ve so higher the tenure, less chance of a customer churning
+2. 
+# Prediction
+> logPred1 = predict(logit1, newdata = cTest, type = "response")
+> table(cTest$Churn, logPred1 > 0.5)
+[1] FALSE TRUE
+  0  1478   71
+  1   442  119
+# FP rate
+> 71/(71+1478)
+[1] 0.04583602
+# TP rate
+> 119/(119+442)
+
+[1] 0.2121212
+# CART + Cross Validation
+#CART model
+#CP modelling
+#Define number of folds
+>library(caret)
+>library(train)
+>numfolds = trainControl(method = "cv", number = 10)
+#CP value range
+>cpfolds = expand.grid(cp = seq(0.001, 0.05, 0.001))
+#CP table
+#Pre-requisite - convert dependent variable to factor
+>cTrain$Churn = as.factor(cTrain$Churn)
+>cv = train(y = cTrain$Churn, x = subset(cTrain, select = -c(Churn)), method = "rpart", trControl = numfolds, tuneGrid = cpfolds)
+>cv
+#Pick the cp value from cv
+>cvTree = rpart(Churn~., data = cTrain, method = "class", cp = 0.006)
+>prp(cvTree)
+#Accuracy of the model - use classification and no threshold value or array variable
+>cvPred = predict(cvTree, newdata = cTest, type = "class")
+>table(cTest$Churn, cvPred)
+>(1340+328)/nrow(cTest)
+>prp(cvTree)
+#1. Looking at the below tree, 
+2.  What does the CART model predict for customer with a one-year contract and a tenure of 12?
+3. One/Two year contracts directly says no churn.
+
+
+
+
+#Approach1
+>churnSample = read.csv("WA_Fn-UseC_-Telco-Customer-Churn.csv")
+
+#Set customer id to NULL
+> churnSample$customer_id = NULL
+
+#Since only 11 missing values, filling them with mean valu
+> churnSample$TotalCharges[is.na(churnSample$TotalCharges)] = mean(churnSample$TotalCharges, na.rm = TRUE)
+
+#Convert the string values to binary or categorical values - 2 level variables
+>churnSample$gender = ifelse(churnSample$gender == "Male", 1, 0)
+>churnSample$Partner = ifelse(churnSample$Partner == "Yes", 1, 0)
+>churnSample$SeniorCitizen = ifelse(churnSample$SeniorCitizen == "Yes", 1, 0)
+>churnSample$Dependents = ifelse(churnSample$Dependents == "Yes", 1, 0)
+>churnSample$PhoneService = ifelse(churnSample$PhoneService == "Yes", 1, 0)
+>churnSample$PaperlessBilling = ifelse(churnSample$PaperlessBilling == "Yes", 1, 0)
+
+# Convert categorical character variables into categorical numeric values - 3 levels
+>churnSample$MultipleLines = as.factor(as.numeric(churnSample$MultipleLines) - 1)
+>churnSample$InternetService = as.factor(as.numeric(churnSample$InternetService) - 1)
+>churnSample$OnlineSecurity  = as.factor(as.numeric(churnSample$OnlineSecurity ) - 1)
+>churnSample$OnlineBackup  = as.factor(as.numeric(churnSample$OnlineBackup ) - 1)
+>churnSample$DeviceProtection = as.factor(as.numeric(churnSample$DeviceProtection) - 1)
+>churnSample$TechSupport  = as.factor(as.numeric(churnSample$TechSupport ) - 1)
+>churnSample$StreamingTV = as.factor(as.numeric(churnSample$StreamingTV) - 1)
+>churnSample$StreamingMovies = as.factor(as.numeric(churnSample$StreamingMovies) - 1)
+>churnSample$PaymentMethod = as.factor(as.numeric(churnSample$PaymentMethod) - 1)
+>churnSample$Contract = as.factor(as.numeric(churnSample$Contract) - 1)
+
+#60% training & 40% testing set data split
+> str(churnSample)
+# 7225 obs
+> library(caTools)
+> split = sample.split(churnSample$Churn, SplitRatio = 0.6)
+> train = subset(churn, split == TRUE)
+> test = subset(churn, split == FALSE)
+>str(train)
+> str(test)
+#Training set - 4225 obs/ testing set - 2818 obs
+
+#Baseline prediction & accuracy
+> table(train$Churn)
+#Since majority is No, the baseline prediction is “No Churn”.
+#Accuracy:
+> 3104/ nrow(train)
+[1] 0.7346746
+
+> #logistic model
+> logit = glm(Churn~., data = train, family = binomial)
+> summary(logit)
+AIC: 3599.3
+> # Logit prediction
+> logPred = predict(logit, newdata = test, type = "response")
+Warning message:
+In predict.lm(object, newdata, se.fit, scale = 1, type = ifelse(type ==  :
+  prediction from a rank-deficient fit may be misleading
+> table(test$Churn, logPred > 0.5)
+   
+    FALSE TRUE
+  0  1839  231
+  1   317  431
+> # Prediction accuracy
+> (1839 + 431) / nrow(test)
+[1] 0.8055358
+
+> #Auc value
+> rocrlog = prediction(logPred, test$Churn)
+> auclog = as.numeric(performance(rocrlog, "auc")@y.values)
+> auclog
+[1] 0.8558988
+
+> #CART model
+> library(rpart)
+> library(rpart.plot)
+> cartChurn = rpart(Churn~., data = train, method = "class")
+> cartPred = predict(cartChurn, newdata = test, type = "class")
+> table(test$Churn, cartPred)
+   cartPred
+       0    1
+  0 1926  144
+  1  455  293
+> (1926 + 293)/nrow(test)
+[1] 0.7874379
+
+> #For auc ignore type = "class"
+> cartPredrocr = predict(cartChurn, newdata = test)
+> rocrCart = prediction(cartPredrocr[,2], test$Churn)
+> aucCart = as.numeric(performance(rocrCart, "auc")@y.values)
+> aucCart
+[1] 0.7924643
+
+> mean(churnSample$tenure)
+[1] 32.37115
+> mean(churnSample$MonthlyCharges)
+[1] 64.76169
+> mean(churnSample$TotalCharges)
+[1] 2283.3
